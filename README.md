@@ -2,46 +2,48 @@
 
 [![Static Badge](https://img.shields.io/badge/DockerHub-blue)](https://hub.docker.com/r/sknnr/enshrouded-dedicated-server) ![Docker Pulls](https://img.shields.io/docker/pulls/sknnr/enshrouded-dedicated-server) [![Static Badge](https://img.shields.io/badge/GitHub-green)](https://github.com/jsknnr/enshrouded-server) ![GitHub Repo stars](https://img.shields.io/github/stars/jsknnr/enshrouded-server)
 
-Run Enshrouded dedicated server in a container. Optionally includes helm chart for running in Kubernetes.
+Run Enshrouded dedicated server in a container. Optionally includes a Helm chart for running in Kubernetes.
 
-**Disclaimer:** This is not an official image. No support, implied or otherwise is offered to any end user by the author or anyone else. Feel free to do what you please with the contents of this repo.
+**Disclaimer:** This is not an official image. No support, implied or otherwise, is offered to any end user by the author or anyone else. Feel free to do what you please with the contents of this repo.
 
-## Usage
+## General Information
 
-The processes within the container do **NOT** run as root. Everything runs as the user steam (gid:10000/uid:10000 by default). If you exec into the container, you will drop into `/home/steam` as the steam user. Enshrouded will be installed to `/home/steam/enshrouded`. Any persistent volumes should be mounted to `/home/steam/enshrouded/savegame` and be owned by 10000:10000.
+The processes within the container does **not** run as root. Everything runs as the user `steam` (uid:10000/gid:10000 by default). If you exec into the container, you will drop into `/home/steam` as the steam user. Enshrouded is installed to `/home/steam/enshrouded`.
 
-If you absolutely require to run the process in the container as a gid/uid other than 10000, you can build your own image based on my dockerfile. Instructions are covered [Here](https://github.com/jsknnr/enshrouded-server/issues/51)
+Any persistent volumes should be mounted to `/home/steam/enshrouded/savegame` and be owned by `10000:10000`.
+
+If you need to run the container process with a different uid/gid, you can build a custom image based on the included Dockerfile. See the [custom uid/gid instructions](https://github.com/jsknnr/enshrouded-server/issues/51) for details.
 
 ### Ports
 
 | Port       | Protocol | Default |
 | ---------- | -------- | ------- |
-| Query Port | UDP      | 15637   |
+| Game Port  | UDP      | 15637   |
 | Steam Port | UDP      | 27015   |
+
+Both ports must be published and forwarded through your router for external connectivity.
 
 ### Environment Variables
 
-| Name            | Description                                                             | Default                  | Required |
-| --------------- | ----------------------------------------------------------------------- | ------------------------ | -------- |
-| SERVER_NAME     | Name for the Server                                                     | Enshrouded Containerized | False    |
-| SERVER_PASSWORD | Password for the server                                                 | None                     | False    |
-| PORT            | Game port                                                               | 15637                    | False    |
-| STEAM_PORT      | Port used for Steam query                                               | 27015                    | False    |
-| SERVER_SLOTS    | Number of slots for connections (Max 16)                                | 16                       | False    |
-| SERVER_IP       | IP address for server to listen on                                      | 0.0.0.0                  | False    |
-| EXTERNAL_CONFIG | If you would rather manually supply a config file, set this to true (1) | 0                        | False    |
+| Name              | Description                                                    | Default                    | Required |
+| ----------------- | -------------------------------------------------------------- | -------------------------- | -------- |
+| `SERVER_NAME`     | Display name for the server                                    | `Enshrouded Containerized` | No       |
+| `SERVER_PASSWORD` | Password required to join the server                           |  None                      | No       |
+| `PORT`            | Game port                                                      | `15637`                    | No       |
+| `STEAM_PORT`      | Port used for Steam queries                                    | `27015`                    | No       |
+| `SERVER_SLOTS`    | Number of player slots (max 16)                                | `16`                       | No       |
+| `SERVER_IP`       | IP address the server listens on                               | `0.0.0.0`                  | No       |
+| `EXTERNAL_CONFIG` | Use a manually supplied config file instead of env vars (0/1)  | `0`                        | No       |
 
-**Note:** SERVER_IP is ignored if using Helm because that isn't how Kubernetes works.
+> Note:
+>
+> `SERVER_IP` is ignored when using Helm, as Kubernetes handles networking differently.
 
-### External config
-`docker-compose-external.yaml` copys `enshrouded_server_external.json` into container to replace the default config file to make it simpler to change all of the sever settings and user groups more info on settings [here](https://enshrouded.zendesk.com/hc/en-us/articles/16055441447709-Dedicated-Server-Configuration)
-
-### Docker
-
-To run the container in Docker, run the following command:
+## Running with Docker
 
 ```bash
 docker volume create enshrouded-persistent-data
+
 docker run \
   --detach \
   --name enshrouded-server \
@@ -49,30 +51,31 @@ docker run \
   --publish 15637:15637/udp \
   --publish 27015:27015/udp \
   --env=SERVER_NAME='Enshrouded Containerized Server' \
-  --env=SERVER_SLOTS=16 \
   --env=SERVER_PASSWORD='ChangeThisPlease' \
+  --env=SERVER_SLOTS=16 \
   --env=PORT=15637 \
+  --env=STEAM_PORT=27015 \
+  --restart=unless-stopped \
   sknnr/enshrouded-dedicated-server:latest
 ```
 
-### Docker Compose
+## Running with Docker Compose
 
-To use Docker Compose, either clone this repo or copy the `compose.yaml` file out of the `container` directory to your local machine. Edit the compose file to change the environment variables to the values you desire and then save the changes. Once you have made your changes, from the same directory that contains the compose and the env files, simply run:
+Clone this repo or copy the `compose.yaml` file from the `container` directory. Edit the environment variables to your liking, then run:
 
 ```bash
 docker-compose up -d
 ```
 
-To bring the container down:
+To stop the server:
 
 ```bash
 docker-compose down
 ```
 
-compose.yaml file:
+### Standard Compose File
 
 ```yaml
-version: "3"
 services:
   enshrouded:
     image: sknnr/enshrouded-dedicated-server:latest
@@ -83,28 +86,28 @@ services:
       - SERVER_NAME=Enshrouded Containerized
       - SERVER_PASSWORD=PleaseChangeMe
       - PORT=15637
+      - STEAM_PORT=27015
       - SERVER_SLOTS=16
       - SERVER_IP=0.0.0.0
     volumes:
       - enshrouded-persistent-data:/home/steam/enshrouded/savegame
+    restart: unless-stopped
 
 volumes:
   enshrouded-persistent-data:
 ```
 
-to use the external config compose file 
+### External Config Compose File
 
-```bash
-docker-compose -f docker-compose-external-config.yaml up -d
-```
+If you prefer full control over the server configuration rather than using environment variables, you can mount your own config file. Set `EXTERNAL_CONFIG=1` and bind-mount your JSON config to replace the default.
 
-To bring the container down:
+> Note:
+>
+> If you are using custom difficulty settings, you must change `"gameSettingsPreset": "Default"` to
+> `"gameSettingsPreset": "Custom"` in your JSON config file, otherwise your difficulty overrides will
+> be ignored.
 
-```bash
-docker-compose -f docker-compose-external-config.yaml down
-```
-
-compose.yaml file:
+For the full list of available server settings and user group options, see the [official dedicated server configuration guide](https://enshrouded.zendesk.com/hc/en-us/articles/16055441447709-Dedicated-Server-Configuration).
 
 ```yaml
 services:
@@ -112,31 +115,30 @@ services:
     image: sknnr/enshrouded-dedicated-server:latest
     ports:
       - "15637:15637/udp"
+      - "27015:27015/udp"
     environment:
       - EXTERNAL_CONFIG=1
     volumes:
-      - 'enshrouded-persistent-data:/home/steam/enshrouded/savegame'
-      - ./enshrouded_server_external.json:/home/steam/enshrouded/enshrouded_server.json #replaces defaut configuration file
+      - enshrouded-persistent-data:/home/steam/enshrouded/savegame
+      - ./enshrouded_server_external.json:/home/steam/enshrouded/enshrouded_server.json
     restart: unless-stopped
 
-volumes: 
+volumes:
   enshrouded-persistent-data:
-    # to set up a persistent volume, you can use the local driver with a bind mount
-    # Uncomment the following lines to use a local directory for persistent data storage
-    # Note: Ensure the path exists on your host machine before starting the container
+    # Uncomment below to use a host bind mount instead of a Docker-managed volume.
+    # Ensure the directory exists and is owned by 10000:10000.
     # driver: local
     # driver_opts:
     #   type: none
-    #   device: /path/to/your/host/directory # Change this to your desired host directory
-    #   o: bind # This volume is bound to the host directory for persistent data storage
+    #   device: /path/to/your/host/directory
+    #   o: bind
 ```
 
-### Podman
-
-To run the container in Podman, run the following command:
+## Running with Podman
 
 ```bash
 podman volume create enshrouded-persistent-data
+
 podman run \
   --detach \
   --name enshrouded-server \
@@ -144,15 +146,16 @@ podman run \
   --publish 15637:15637/udp \
   --publish 27015:27015/udp \
   --env=SERVER_NAME='Enshrouded Containerized Server' \
-  --env=SERVER_SLOTS=16 \
   --env=SERVER_PASSWORD='ChangeThisPlease' \
+  --env=SERVER_SLOTS=16 \
   --env=PORT=15637 \
+  --env=STEAM_PORT=27015 \
   docker.io/sknnr/enshrouded-dedicated-server:latest
 ```
 
-### Quadlet
+### Quadlet (Podman systemd integration)
 
-To run the container with Podman's new quadlet subsystem, make a file under (when running as root) /etc/containers/systemd/enshrouded.container containing:
+To run the container as a systemd service using Podman's quadlet subsystem, create the file `/etc/containers/systemd/enshrouded.container` (when running as root):
 
 ```text
 [Unit]
@@ -167,48 +170,55 @@ ContainerName=enshrouded-server
 Environment=SERVER_NAME="Enshrouded Containerized Server"
 Environment=SERVER_PASSWORD="ChangeThisPlease"
 Environment=PORT=15637
+Environment=STEAM_PORT=27015
 Environment=SERVER_SLOTS=16
 
 [Service]
-# Restart service when sleep finishes
 Restart=always
-# Extend Timeout to allow time to pull the image
 TimeoutStartSec=900
 
 [Install]
-# Start by default on boot
 WantedBy=multi-user.target default.target
 ```
 
-### Kubernetes
+## Running with Kubernetes (Helm)
 
-I've built a Helm chart and have included it in the `helm` directory within this repo. Modify the `values.yaml` file to your liking and install the chart into your cluster. Be sure to create and specify a namespace as I did not include a template for provisioning a namespace.
+A Helm chart is included in the `helm` directory of this repo and is also hosted in the [jsknnr helm-charts repository](https://jsknnr.github.io/helm-charts).
 
-The chart in this repo is also hosted in my helm-charts repository [here](https://jsknnr.github.io/helm-charts)
-
-To install this chart from my helm-charts repository:
+### Install from the Helm repository
 
 ```bash
 helm repo add jsknnr https://jsknnr.github.io/helm-charts
 helm repo update
 ```
 
-To install the chart from the repo:
-
 ```bash
-helm install enshrouded jsknnr/enshrouded-dedicated-server --values myvalues.yaml
-# Where myvalues.yaml is your copy of the Values.yaml file with the settings that you want
+helm install enshrouded jsknnr/enshrouded-dedicated-server \
+  --namespace enshrouded \
+  --create-namespace \
+  --values myvalues.yaml
 ```
+
+Where `myvalues.yaml` is your copy of `values.yaml` with any overrides applied. Be sure to create and specify a namespace, as the chart does not provision one by default.
 
 ## Troubleshooting
 
 ### Connectivity
 
-If you are having issues connecting to the server once the container is deployed, I promise the issue is not with this image. You need to make sure that the ports 15636 and 15637 (or whichever ones you decide to use) are open on your router as well as the container host where this container image is running. You will also have to port-forward the game-port and query-port from your router to the private IP address of the container host where this image is running. After this has been done correctly and you are still experiencing issues, your internet service provider (ISP) may be blocking the ports and you should contact them to troubleshoot.
+If you cannot connect to the server after deployment, the issue is almost certainly with your network configuration, not this image. Verify the following:
 
-For additional help, refer to this closed issue where some folks were able to debug their issues. It may be of help. <br>
-https://github.com/jsknnr/enshrouded-server/issues/16
+1. The game port (default 15637) and Steam port (default 27015) are open on your firewall and container host.
+2. Both ports are forwarded from your router to the private IP of the machine running the container.
+3. Your ISP is not blocking the ports. Contact them if the above steps are confirmed correct and connectivity still fails.
 
-### Storage
+For additional help, see [this discussion thread](https://github.com/jsknnr/enshrouded-server/issues/16) where several users debugged similar issues.
 
-I recommend having Docker or Podman manage the volume that gets mounted into the container. However, if you absolutely must bind mount a directory into the container you need to make sure that on your container host the directory you are bind mounting is owned by 10000:10000 by default (`chown -R 10000:10000 /path/to/directory`). If the ownership of the directory is not correct the container will not start as the server will be unable to persist the savegame.
+### Storage and Permissions
+
+It is recommended to let Docker or Podman manage the persistent volume. If you must use a bind mount, the host directory must be owned by `10000:10000`:
+
+```bash
+chown -R 10000:10000 /path/to/your/directory
+```
+
+If ownership is incorrect, the container will fail to start because the server process cannot write savegame data.
